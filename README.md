@@ -1,29 +1,36 @@
 # 5-Minute BTC Polymarket Trading Bot
 
-**Rust trading bot for Polymarket prediction markets.** Automates hedging and position management on **BTC 5-minute** binary (Up/Down) markets. Lock profit when cost per pair is favorable; expand positions when the opposite side is rising and PnL is skewed.
+**Rust trading bot for Polymarket prediction markets.** It automates hedging and position management on **BTC 5-minute** binary (Up/Down) markets: lock profit when the combined cost per pair is favorable, and adjust exposure when the opposite side is rising and PnL is skewed.
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![Polymarket](https://img.shields.io/badge/Polymarket-CLOB-blue)](https://polymarket.com)
 
-**Repository:** [github.com/gabagool23/5min-btc-polymarket-trading-bot](https://github.com/gabagool23/5min-btc-polymarket-trading-bot)
+**Repository:** [github.com/Poly-Tutor/5min-btc-polymarket-trading-bot](https://github.com/Poly-Tutor/5min-btc-polymarket-trading-bot)
+
+---
+
+## Quick start (first time)
+
+Follow these steps in order. You do **not** need Polymarket API keys to try **simulation** mode.
+
+| Step | What to do |
+|------|-------------|
+| 1 | **Install Rust** from [rustup.rs](https://rustup.rs/). Open a new terminal and run `rustc --version` — you should see 1.70 or newer. |
+| 2 | **Clone this repo** (see [Installation](#installation)) and `cd` into the project folder. |
+| 3 | **Build:** `cargo build --release` (first build may take several minutes). |
+| 4 | **Run in simulation:** `cargo run --release -- --simulation` — no real orders; output goes to the console and `history.toml`. |
+| 5 | **Read [logic.md](logic.md)** to understand lock, expansion, and when the bot trades vs. sits flat. |
+| 6 | **Live trading:** create `config.json` from `config.example.json`, add your Polymarket credentials, then run with `--production --config config.json` (see [Configuration](#configuration) and [Usage](#usage)). |
+
+**Windows (PowerShell):** use `Copy-Item config.example.json config.json` instead of `cp`. Use the same `cargo` commands as below.
+
+**Problems?** Check [Requirements](#requirements), confirm your Rust toolchain is current, and open an [issue](https://github.com/Poly-Tutor/5min-btc-polymarket-trading-bot/issues) with your OS and the exact error text.
 
 ---
 
 ## How we profit
 
-We buy **Up** and **Down** so that **cost per pair (Up + Down) &lt; $1**. Whichever side wins pays out $1 per share, so we lock in profit regardless of outcome. The bot only adds a side when the resulting average cost per pair stays under your cap (e.g. 0.99).
-
----
-
-## Test result
-
-Below is a test run of the 5-minute bot: we buy Up and Down with combined cost &lt; 1 and realize profit when the market resolves.
-
-![5-minute bot test result](5min_test.png)
-
-
-https://github.com/user-attachments/assets/a5bdf2a7-f4a3-4527-88b6-a08c895998b4
-
+We buy **Up** and **Down** so that **cost per pair (Up + Down) < $1**. Whichever side wins pays out $1 per share, so we can lock in profit regardless of outcome. The bot only adds a side when the resulting average cost per pair stays under your cap (for example `0.99`).
 
 ---
 
@@ -31,9 +38,9 @@ https://github.com/user-attachments/assets/a5bdf2a7-f4a3-4527-88b6-a08c895998b4
 
 - **5-minute BTC only:** Trades **5m** binary Up/Down markets for **BTC** on [Polymarket](https://polymarket.com).
 - **Lock rule:** Buys the opposite side only when **cost per pair** stays under your cap (e.g. Up_avg + Down_ask ≤ 0.99), so you lock in edge.
-- **Expansion rule:** When you can’t lock (cost would exceed max) but the other side is **rising** and its outcome PnL is worse, the bot buys that side to improve exposure (see [logic.md](logic.md)).
+- **Expansion rule:** When you cannot lock (cost would exceed max) but the other side is **rising** and its outcome PnL is worse, the bot buys that side to improve exposure (see [logic.md](logic.md)).
 - **Ride the winner:** When one side is clearly winning (trend UpRising/DownRising), the bot adds to that side to grow “PnL if that side wins.”
-- **PnL rebalance:** If one outcome’s PnL is negative and you’re not strongly trending the other way, it buys the weak side (within cost limits).
+- **PnL rebalance:** If one outcome’s PnL is negative and you are not strongly trending the other way, it buys the weak side (within cost limits).
 - **Flat = no trade:** When the short-term trend is **Flat** (no clear move), the bot only locks if conditions allow; otherwise it does not open new risk (Example 6 in [logic.md](logic.md)).
 - **Simulation mode:** Run with `--simulation` (default) to log trades without sending orders.
 - **Market resolution:** Checks for closed markets, computes actual PnL, and logs “Total actual PnL (all time).”
@@ -41,15 +48,15 @@ https://github.com/user-attachments/assets/a5bdf2a7-f4a3-4527-88b6-a08c895998b4
 
 ---
 
-## Strategy Overview
+## Strategy overview
 
 The bot keeps **positions** per market (Up shares, Down shares, average prices). Each tick it:
 
 1. Updates **trend** from the last 4–5 price points (UpRising, DownRising, Flat, UpFalling, DownFalling).
 2. **Lock:** If adding the underweight side keeps cost per pair ≤ `cost_per_pair_max` → buy that side (lock).
-3. **Expansion:** If you *can’t* lock (cost would exceed max) but the other side is **rising** and “PnL if that side wins” is worse → buy that side (new leg / rebalance).
+3. **Expansion:** If you *cannot* lock (cost would exceed max) but the other side is **rising** and “PnL if that side wins” is worse → buy that side (new leg / rebalance).
 4. **Ride winner:** If trend is UpRising or DownRising (and not Flat) → buy the rising side (within cost and buy limits).
-5. **PnL rebalance:** If one outcome’s PnL is negative and trend isn’t strongly the other way → buy the weak side (within limits).
+5. **PnL rebalance:** If one outcome’s PnL is negative and trend is not strongly the other way → buy the weak side (within limits).
 6. **Trend fallback:** DownFalling → can buy Up; UpFalling → can buy Down (no buy on Flat except lock).
 
 Detailed examples (no position, only Up, only Down, have both, Flat, market close) are in **[logic.md](logic.md)**.
@@ -58,44 +65,63 @@ Detailed examples (no position, only Up, only Down, have both, Flat, market clos
 
 ## Requirements
 
-- **Rust** 1.70+ (`rustc --version`)
-- **Polymarket API** credentials (API key, secret, passphrase, and optionally private key / proxy wallet for live trading)
+- **Rust** 1.70 or newer — install via [rustup](https://rustup.rs/) and verify with `rustc --version`.
+- **For live trading:** Polymarket API credentials (API key, secret, passphrase, and optionally private key / proxy wallet as required by your setup). Simulation mode does not send orders; you still get realistic logging.
 
 ---
 
 ## Installation
 
+**Linux / macOS (bash):**
+
 ```bash
-git clone https://github.com/baker42757/5min-btc-polymarket-trading-bot.git
+git clone https://github.com/Poly-Tutor/5min-btc-polymarket-trading-bot.git
 cd 5min-btc-polymarket-trading-bot
 cargo build --release
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/Poly-Tutor/5min-btc-polymarket-trading-bot.git
+cd 5min-btc-polymarket-trading-bot
+cargo build --release
+```
+
+If `git` or `cargo` is not recognized, install [Git for Windows](https://git-scm.com/download/win) and Rust from [rustup.rs](https://rustup.rs/), then restart the terminal.
 
 ---
 
 ## Configuration
 
-Copy the example config and edit with your settings:
+1. Copy the example file to `config.json`:
 
-```bash
-cp config.example.json config.json
-# Edit config.json with your Polymarket API keys and trading parameters
-```
+   ```bash
+   cp config.example.json config.json
+   ```
 
-**Important:** `config.json` is gitignored. Do not commit real API keys.
+   On **Windows PowerShell:**
 
-### Trading options (in `config.json` → `trading`)
+   ```powershell
+   Copy-Item config.example.json config.json
+   ```
+
+2. Edit `config.json`: set `polymarket` fields (API key, secret, passphrase, and wallet fields if you use live trading). Use the same structure as [config.example.json](config.example.json).
+
+**Security:** `config.json` is gitignored. Do not commit API keys or private keys.
+
+### Trading options (`config.json` → `trading`)
 
 | Option | Description | Example |
 |--------|-------------|---------|
 | `markets` | Assets to trade (this bot: BTC only) | `["btc"]` |
 | `timeframes` | Periods (this bot: 5m only) | `["5m"]` |
 | `cost_per_pair_max` | Max cost per pair when locking | `0.99` |
-| `min_side_price` | Don’t buy below this ask | `0.05` |
-| `max_side_price` | Don’t buy above this ask | `0.99` |
+| `min_side_price` | Do not buy below this ask | `0.05` |
+| `max_side_price` | Do not buy above this ask | `0.99` |
 | `cooldown_seconds` | Min seconds between buys | `0` |
 | `cooldown_seconds_1h` | Min seconds between buys (1h; N/A for 5m-only) | `45` |
-| `shares` | Override size per order; `null` = default (BTC 5m=24) | `null` |
+| `shares` | Override size per order; `null` = default (BTC 5m = 24) | `null` |
 | `size_reduce_after_secs` | Start reducing size in last N seconds | `300` |
 | `market_closure_check_interval_seconds` | How often to check for resolved markets | `20` |
 
@@ -103,7 +129,7 @@ cp config.example.json config.json
 
 ## Usage
 
-**Simulation (no real orders):**
+**Simulation (recommended first — no real orders):**
 
 ```bash
 cargo run -- --simulation
@@ -123,7 +149,7 @@ cargo run --release -- --production --config config.json
 cargo run --release -- --redeem --condition-id <CONDITION_ID>
 ```
 
-Logs go to `history.toml` (and your configured log target). Price lines look like:
+Logs go to `history.toml` (and your configured log target). Example price line:
 
 ```text
 [2026-02-04T23:17:23] BTC 5m Up Token BID:$0.52 ASK:$0.53 Down Token BID:$0.47 ASK:$0.48 remaining time:4m 12s
@@ -157,19 +183,14 @@ Logs go to `history.toml` (and your configured log target). Price lines look lik
 
 ## Disclaimer
 
-This bot is for **educational and research purposes**. Trading prediction markets involves risk. Past behavior in simulation or backtests does not guarantee future results. Use at your own risk. The authors are not responsible for any financial loss.
+This bot is for **educational and research purposes**. Trading prediction markets involves risk of loss. Past behavior in simulation or backtests does not guarantee future results. Use at your own risk. The authors are not responsible for any financial loss.
 
 ---
 
-## Contact
+## Community
 
-Telegram: [@gabagool21](https://t.me/gabagool21)
-
-<div align="left">
-  <a href="https://t.me/gabagool21">
-    <img height="30" src="https://img.shields.io/badge/Telegram-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
-  </a>
-</div>
+- **Issues & questions:** [GitHub Issues](https://github.com/Poly-Tutor/5min-btc-polymarket-trading-bot/issues)
+- **Telegram:** [@gabagool21](https://t.me/gabagool21)
 
 ---
 
